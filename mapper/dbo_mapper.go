@@ -92,6 +92,10 @@ func ScanOne(rows pgx.Rows, dest interface{}) error {
 	// de-reference pointer
 	destinationType = reflectutils.DeReferencePointer(destinationType)
 
+	if destinationType.Kind() != reflect.Struct {
+		return errors.New("dest must be a pointer to a struct")
+	}
+
 	lookupEntity := make(map[reflect.Type]map[interface{}]reflect.Value)
 
 	for rows.Next() {

@@ -49,7 +49,7 @@ func TestScanOne(t *testing.T) {
 		runSuccessfulTest(reflect.TypeOf(user{}), setupFn, query, expectedResult)
 	})
 
-	t.Run("Handles empty results gracefully", func(t *testing.T) {
+	t.Run("When no rows are returned  ErrNoRows is returned", func(t *testing.T) {
 		mock := setupPostgresMock(t, "^SELECT (.+) FROM users$", [][]interface{}{}, []string{"user_id", "user_name"})
 		rows, err := mock.Query(context.Background(), "SELECT * FROM users")
 		assert.NoError(t, err)
@@ -150,6 +150,22 @@ func TestScanOne(t *testing.T) {
 		runSuccessfulTest(reflect.TypeOf(addressWithoutUsersSlicePointer{}), setup, query, expectedAddressWithoutUserPointer)
 		runSuccessfulTest(reflect.TypeOf(addressWithUsersSlicePointer{}), setup, query, expectedAddressWithUserPointer)
 
+	})
+
+	t.Run("Fails to map pgx.Rows to Entity when input is not pointer to instance", func(t *testing.T) {
+		mock := setupPostgresMock(t, "^SELECT (.+) FROM users$", [][]interface{}{}, []string{"user_id", "user_name"})
+		rows, err := mock.Query(context.Background(), "SELECT * FROM users")
+		assert.NoError(t, err)
+
+		var u []user
+		err = ScanOne(rows, u)
+		assert.ErrorContains(t, err, "dest must be a pointer")
+
+		err = ScanOne(rows, &u)
+		assert.ErrorContains(t, err, "dest must be a pointer to a struct")
+
+		err = ScanOne(rows, nil)
+		assert.ErrorContains(t, err, "dest cannot be nil")
 	})
 }
 

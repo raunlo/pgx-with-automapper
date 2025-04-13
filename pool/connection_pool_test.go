@@ -1,4 +1,4 @@
-package pgx_with_mapper
+package pool
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 	"log"
 	"os"
+	"pgx-with-mapper/mapper"
 	"testing"
 	"time"
 )
@@ -36,7 +37,6 @@ func TestMain(m *testing.M) {
 		postgres.WithUsername(databaseUser),
 		postgres.WithPassword(password),
 		postgres.WithDatabase(databaseName),
-		postgres.WithInitScripts("init.sql"),
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("database system is ready to accept connections").
 				WithOccurrence(2).
@@ -48,6 +48,20 @@ func TestMain(m *testing.M) {
 
 	databaseConfiguration := createDatabaseConfiguration(ctx)
 	connectionPool = NewDatabasePool(*databaseConfiguration)
+
+	// Insert test data
+	_, err = connectionPool.Exec(ctx, `
+        CREATE TABLE users (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            email VARCHAR(255) NOT NULL
+        );
+        INSERT INTO users (name, email) VALUES
+        ('John Doe', 'john.doe@example.com');
+    `)
+	if err != nil {
+		panic(err)
+	}
 
 	code := m.Run()
 
@@ -95,7 +109,7 @@ func TestQueryOneWhichReturnsOne(t *testing.T) {
 func TestQueryOneWhichReturnsEmpty(t *testing.T) {
 	res := testUserStruct{}
 	err := connectionPool.QueryOne(context.Background(), "SELECT * FROM users WHERE ID  = 2", &res, nil)
-	assert.EqualError(t, err, ErrNoRows.Error())
+	assert.EqualError(t, err, mapper.ErrNoRows.Error())
 }
 
 func TestQueryListReturnsList(t *testing.T) {

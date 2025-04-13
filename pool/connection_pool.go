@@ -1,4 +1,4 @@
-package pgx_with_mapper
+package pool
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"github.com/pkg/errors"
 	"net"
 	"net/url"
+	"pgx-with-mapper/mapper"
 	"strconv"
 	"time"
 )
@@ -102,7 +103,7 @@ func (p *databaseConnectionPool) QueryOne(ctx context.Context, sql string, dest 
 	}
 	defer rows.Close()
 
-	return ScanOne(rows, dest)
+	return mapper.ScanOne(rows, dest)
 }
 
 func (p *databaseConnectionPool) QueryList(ctx context.Context, sql string, dest interface{}, args pgx.NamedArgs) error {
@@ -112,7 +113,7 @@ func (p *databaseConnectionPool) QueryList(ctx context.Context, sql string, dest
 	}
 	defer rows.Close()
 
-	return ScanMany(rows, dest)
+	return mapper.ScanMany(rows, dest)
 }
 
 func (p *databaseConnectionPool) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
