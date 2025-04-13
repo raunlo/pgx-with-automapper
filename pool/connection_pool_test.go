@@ -3,13 +3,13 @@ package pool
 import (
 	"context"
 	"github.com/jackc/pgx/v5"
+	"github.com/raunlo/pgx-with-automapper/mapper"
 	"github.com/stretchr/testify/assert"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"log"
 	"os"
-	"pgx-with-mapper/mapper"
 	"testing"
 	"time"
 )

@@ -6,9 +6,9 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pkg/errors"
+	"github.com/raunlo/pgx-with-automapper/mapper"
 	"net"
 	"net/url"
-	"pgx-with-mapper/mapper"
 	"strconv"
 	"time"
 )
