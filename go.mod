@@ -1,4 +1,4 @@
-module pgx-with-mapper
+module github.com/raunlo/pgx-with-automapper
 
 go 1.24
 

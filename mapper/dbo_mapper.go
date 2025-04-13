@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/jackc/pgx/v5"
 	"github.com/pkg/errors"
-	reflectutils "pgx-with-mapper/reflect_utils"
+	reflectutils "github.com/raunlo/pgx-with-automapper/reflect_utils"
 	"reflect"
 	"time"
 )
