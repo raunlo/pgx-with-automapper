@@ -106,6 +106,27 @@ func TestQueryOneWhichReturnsOne(t *testing.T) {
 	assert.Equal(t, "john.doe@example.com", res.Email)
 }
 
+func TestQueryOneInTransactionWhichReturnsOne(t *testing.T) {
+	res := testUserStruct{}
+	tx, err := connectionPool.BeginTx(context.Background(), pgx.TxOptions{IsoLevel: pgx.Serializable})
+	if err != nil {
+		t.Fatalf("Failed to begin transaction: %v", err)
+	}
+
+	err = tx.QueryOne(context.Background(), "SELECT * FROM users WHERE ID  = 1", &res, nil)
+
+	assert.NoError(t, err)
+	assert.Equal(t, uint(1), res.UserId)
+	assert.Equal(t, "John Doe", res.Name)
+	assert.Equal(t, "john.doe@example.com", res.Email)
+	defer func(tx TransactionWrapper, ctx context.Context) {
+		err := tx.Commit(ctx)
+		if err != nil {
+			t.Fatalf("Failed to commit test transaction: %v", err)
+		}
+	}(tx, context.Background())
+}
+
 func TestQueryOneWhichReturnsEmpty(t *testing.T) {
 	res := testUserStruct{}
 	err := connectionPool.QueryOne(context.Background(), "SELECT * FROM users WHERE ID  = 2", &res, nil)
@@ -115,6 +136,22 @@ func TestQueryOneWhichReturnsEmpty(t *testing.T) {
 func TestQueryListReturnsList(t *testing.T) {
 	var res []testUserStruct
 	err := connectionPool.QueryList(context.Background(), "SELECT * FROM users", &res, nil)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(res))
+	assert.Equal(t, uint(1), res[0].UserId)
+	assert.Equal(t, "John Doe", res[0].Name)
+	assert.Equal(t, "john.doe@example.com", res[0].Email)
+}
+
+func TestQueryListInTransactionReturnsList(t *testing.T) {
+	var res []testUserStruct
+	tx, err := connectionPool.BeginTx(context.Background(), pgx.TxOptions{IsoLevel: pgx.Serializable})
+	if err != nil {
+		t.Fatalf("Failed to begin transaction: %v", err)
+	}
+
+	err = tx.QueryList(context.Background(), "SELECT * FROM users", &res, nil)
 
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(res))
