@@ -2,15 +2,16 @@ package pool
 
 import (
 	"context"
+	"net"
+	"net/url"
+	"strconv"
+	"time"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pkg/errors"
 	"github.com/raunlo/pgx-with-automapper/mapper"
-	"net"
-	"net/url"
-	"strconv"
-	"time"
 )
 
 type DatabaseConfiguration struct {
@@ -26,6 +27,7 @@ type DatabaseConfiguration struct {
 	Host                     *string        `yaml:"host"`
 	Port                     *string        `yaml:"port"`
 	Name                     *string        `yaml:"name"`
+	Schema                   *string        `yaml:"schema"`
 }
 
 func (cfg DatabaseConfiguration) getDSN() string { // nolint:gocritic
@@ -51,6 +53,10 @@ func (cfg DatabaseConfiguration) getDSN() string { // nolint:gocritic
 	if cfg.StatementCacheCapacity != nil {
 		query.Set("statement_cache_capacity", strconv.Itoa(*cfg.StatementCacheCapacity))
 	}
+	if cfg.Schema != nil {
+		query.Set("search_path", *cfg.Schema)
+	}
+
 	dsn := url.URL{
 		Scheme:   "postgres",
 		User:     url.UserPassword(*cfg.User, *cfg.Password),
