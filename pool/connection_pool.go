@@ -28,6 +28,7 @@ type DatabaseConfiguration struct {
 	Port                     *string        `yaml:"port"`
 	Name                     *string        `yaml:"name"`
 	Schema                   *string        `yaml:"schema"`
+	Sslmode                  *string        `yaml:"sslMode"`
 }
 
 func (cfg DatabaseConfiguration) getDSN() string { // nolint:gocritic
@@ -55,6 +56,9 @@ func (cfg DatabaseConfiguration) getDSN() string { // nolint:gocritic
 	}
 	if cfg.Schema != nil {
 		query.Set("search_path", *cfg.Schema)
+	}
+	if cfg.Sslmode != nil {
+		query.Set("sslmode", *cfg.Sslmode)
 	}
 
 	dsn := url.URL{
