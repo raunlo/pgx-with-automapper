@@ -2,11 +2,12 @@ package mapper
 
 import (
 	"context"
+	"reflect"
+	"testing"
+
 	"github.com/pashagolub/pgxmock/v2"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
-	"reflect"
-	"testing"
 )
 
 type user struct {
@@ -224,5 +225,52 @@ func TestScanMany(t *testing.T) {
 
 		runSuccessfulTest(reflect.TypeOf([]OrgWithUser{}), setupMockFunc, query, expectedOrgWithUserResult)
 		runSuccessfulTest(reflect.TypeOf([]OrgWithUserPointer{}), setupMockFunc, query, expectedOrgWithUserPointerResult)
+	})
+
+}
+
+func TestQuery_WithNoMatchingJoin(t *testing.T) {
+	// org dataset which pints to user and datatype is object not pointer
+	type OrgWithManyUsers struct {
+		OrgId   uint   `primaryKey:"org_id"`
+		OrgName string `db:"org_name"`
+		Users   []user `relationship:"oneToMany"`
+	}
+	t.Run("Maps many result sinto struct", func(t *testing.T) {
+		mock := setupPostgresMock(t, "^SELECT (.+) FROM org o left join users u on u.user_id = o.user_id$",
+			[][]interface{}{{nil, nil, 1, "default_org"}}, []string{"user_id", "user_name", "org_id", "org_name"})
+
+		expectedResult := []OrgWithManyUsers{{
+			OrgId:   1,
+			OrgName: "default_org",
+			Users:   nil,
+		}}
+		rows, err := mock.Query(t.Context(), "SELECT * FROM org o left join users u on u.user_id = o.user_id")
+		assert.NoError(t, err)
+		var result []OrgWithManyUsers
+
+		err = ScanMany(rows, &result)
+
+		assert.NoError(t, err)
+		assert.Equal(t, expectedResult, result)
+	})
+
+	t.Run("Maps one result into struct", func(t *testing.T) {
+		mock := setupPostgresMock(t, "^SELECT (.+) FROM org o left join users u on u.user_id = o.user_id$",
+			[][]interface{}{{nil, nil, 1, "default_org"}}, []string{"user_id", "user_name", "org_id", "org_name"})
+
+		expectedResult := OrgWithManyUsers{
+			OrgId:   1,
+			OrgName: "default_org",
+			Users:   nil,
+		}
+		rows, err := mock.Query(t.Context(), "SELECT * FROM org o left join users u on u.user_id = o.user_id")
+		assert.NoError(t, err)
+		var result OrgWithManyUsers
+
+		err = ScanOne(rows, &result)
+
+		assert.NoError(t, err)
+		assert.Equal(t, expectedResult, result)
 	})
 }
