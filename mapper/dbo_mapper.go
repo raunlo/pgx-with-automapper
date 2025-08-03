@@ -2,11 +2,12 @@ package mapper
 
 import (
 	"fmt"
+	"reflect"
+	"time"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/pkg/errors"
 	reflectutils "github.com/raunlo/pgx-with-automapper/reflect_utils"
-	"reflect"
-	"time"
 )
 
 var (
@@ -177,7 +178,7 @@ func mapToStruct(entityType reflect.Type, values map[string]any, lookup map[refl
 	entityMappingInfo, mappingInfoExists := GetEntityGraphMappingInfo(entityType)
 	if !mappingInfoExists {
 		analyzeEntityGraphs(entityType)
-		entityMappingInfo, mappingInfoExists = GetEntityGraphMappingInfo(entityType)
+		entityMappingInfo, _ = GetEntityGraphMappingInfo(entityType)
 		if entityMappingInfo == nil {
 			return reflect.Value{}, nil, errors.New(fmt.Sprintf("no mapping info found for entity(%s)", entityType))
 		}
@@ -229,7 +230,7 @@ func mapRelationships(entityMappingInfo *MappingInfo, values map[string]any, loo
 		if err != nil {
 			return err
 		}
-		if value.IsValid() {
+		if value.IsValid() && reflectutils.IsStructPointerWithNonZeroFields(value) {
 			field := obj.Field(fieldIndex)
 			if reflectutils.IsStruct(field) && !reflect.Indirect(field).IsZero() {
 				return getTooManyRowsError(relationshipEntityType)
