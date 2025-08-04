@@ -28,7 +28,7 @@ func analyzeEntityGraphs(entityType reflect.Type) {
 func analyzeEntity(currentType reflect.Type) error {
 	var fieldMapping = make(map[string]int)
 	var relationships = make(map[int]reflect.Type)
-	var keyField string
+	var keyField *PrimaryKeyInfo
 	if _, exists := GetEntityGraphMappingInfo(currentType); exists {
 		return nil
 	}
@@ -46,9 +46,13 @@ func analyzeEntity(currentType reflect.Type) error {
 
 		switch {
 		case primaryKeyTag != "":
-			if keyField == "" {
+			if keyField == nil {
 				fieldMapping[primaryKeyTag] = index
-				keyField = primaryKeyTag
+				keyField = &PrimaryKeyInfo{
+					dbPrimaryKeyName:          primaryKeyTag,
+					structPrimaryKeyFieldName: currentType.Field(index).Name,
+				}
+				fmt.Println(keyField)
 			} else {
 				return errors.New("multiple primary key fields found")
 			}
@@ -118,6 +122,7 @@ func ScanOne(rows pgx.Rows, dest interface{}) error {
 
 // ScanMany scans rows into a slice of objects.
 func ScanMany(rows pgx.Rows, dest interface{}) error {
+	resultMap := make(map[interface{}]reflect.Value)
 	defer rows.Close()
 	destinationPtrValue := reflect.ValueOf(dest)
 	if dest == nil {
@@ -148,18 +153,30 @@ func ScanMany(rows pgx.Rows, dest interface{}) error {
 			return err
 		}
 
-		obj, exists, err := mapToStruct(elType, rowInMap, lookupEntity, newInstance)
+		obj, _, err := mapToStruct(elType, rowInMap, lookupEntity, newInstance)
 		if err != nil {
 			return err
 		}
-
 		// Append to the existing slice only if it is not yet mapped
-		if obj.IsValid() && exists != nil && !*exists {
+		if obj.IsValid() {
 			if obj.Kind() == reflect.Ptr {
 				obj = obj.Elem()
 			}
-			result = reflect.Append(result, obj)
+
+			entityMappingInfo, _ := GetEntityGraphMappingInfo(elType)
+			keyField := entityMappingInfo.KeyField.structPrimaryKeyFieldName
+
+			field := obj.FieldByName(keyField)
+			fmt.Println(field)
+			actualValue := field.Interface()
+			resultMap[actualValue] = obj
+
+			//result = reflect.Append(result, obj)
 		}
+	}
+
+	for _, value := range resultMap {
+		result = reflect.Append(result, value)
 	}
 	destinationValue.Set(result)
 	return nil
@@ -183,7 +200,7 @@ func mapToStruct(entityType reflect.Type, values map[string]any, lookup map[refl
 			return reflect.Value{}, nil, errors.New(fmt.Sprintf("no mapping info found for entity(%s)", entityType))
 		}
 	}
-	keyValue, keyValueExists := values[entityMappingInfo.KeyField]
+	keyValue, keyValueExists := values[entityMappingInfo.KeyField.dbPrimaryKeyName]
 	if !keyValueExists {
 		return reflect.Value{}, nil, errors.New("no key field found in values")
 	}
@@ -362,39 +379,52 @@ func setStructField(field reflect.Value, value interface{}, v reflect.Value) err
 }
 
 func setSliceField(field reflect.Value, value interface{}, v reflect.Value) error {
+	if field.Kind() != reflect.Slice {
+		return fmt.Errorf("field must be a slice, got %s", field.Kind())
+	}
+
 	elemType := field.Type().Elem()
-	// Ensure the value is a slice
-	if v.Kind() != reflect.Slice {
-		// Assuming newElem is a ChecklistItemRowDbo, but value is *ChecklistItemRowDbo
-		currentSlice := field.Interface()
-		if currentSlice == nil {
-			// Handle the case where the slice is nil
-			currentSlice = reflect.MakeSlice(field.Type(), 0, 1)
+
+	// Use existing slice or create if nil
+	slice := field
+	if field.IsNil() {
+		slice = reflect.MakeSlice(field.Type(), 0, 0)
+	}
+
+	// Case: value is a slice
+	if v.Kind() == reflect.Slice {
+		for i := 0; i < v.Len(); i++ {
+			elem := v.Index(i)
+
+			var newElem reflect.Value
+			if elem.Type().AssignableTo(elemType) {
+				newElem = elem
+			} else if elem.Type().ConvertibleTo(elemType) {
+				newElem = elem.Convert(elemType)
+			} else {
+				return fmt.Errorf("cannot assign or convert %s to %s", elem.Type(), elemType)
+			}
+
+			slice = reflect.Append(slice, newElem)
 		}
-
-		slice := reflect.ValueOf(currentSlice)
-		newElem := reflect.New(elemType).Elem()
-
-		if err := setFieldValue(newElem, value); err != nil {
-			return err
+	} else {
+		// Single value
+		var newElem reflect.Value
+		if v.Type().AssignableTo(elemType) {
+			newElem = v
+		} else if v.Type().ConvertibleTo(elemType) {
+			newElem = v.Convert(elemType)
+		} else {
+			return fmt.Errorf("cannot assign or convert %s to %s", v.Type(), elemType)
 		}
-
-		// Append to the existing slice
+		fmt.Println("Slice before appending")
+		fmt.Println(slice.Interface())
 		slice = reflect.Append(slice, newElem)
-		field.Set(slice)
-		return nil
+		fmt.Println("Slice after appending")
+		fmt.Println(slice.Interface())
 	}
 
-	// Ensure the slice type matches the field slice type (e.g., []int, []string)
-
-	for i := 0; i < v.Len(); i++ {
-		elem := v.Index(i)
-		// Create a new slice element of the correct type
-		newElem := reflect.New(elemType).Elem()
-		if err := setFieldValue(newElem, elem.Interface()); err != nil {
-			return err
-		}
-		field.Set(reflect.Append(field, newElem))
-	}
+	// Write back the final slice to the field
+	field.Set(slice)
 	return nil
 }
