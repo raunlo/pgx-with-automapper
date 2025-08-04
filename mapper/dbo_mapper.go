@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/pkg/errors"
 	reflectutils "github.com/raunlo/pgx-with-automapper/reflect_utils"
+	ordered_map "github.com/wk8/go-ordered-map/v2"
 )
 
 var (
@@ -123,10 +124,7 @@ func ScanOne(rows pgx.Rows, dest interface{}) error {
 func ScanMany(rows pgx.Rows, dest interface{}) error {
 	// resultNap is used to get unique and most recent data, for example when
 	// there is object with many left join results then you need to overwrite value.
-	resultMap := make(map[interface{}]reflect.Value)
-	// map is not good structure to keeo order.
-	// id order slice will hold order of element sliek sql returns.
-	idOrder := make([]interface{}, 0)
+	resultMap := ordered_map.New[interface{}, reflect.Value]()
 	defer rows.Close()
 	destinationPtrValue := reflect.ValueOf(dest)
 	if dest == nil {
@@ -172,18 +170,14 @@ func ScanMany(rows pgx.Rows, dest interface{}) error {
 
 			field := obj.FieldByName(keyField)
 			actualValue := field.Interface()
-
-			if _, exists := resultMap[actualValue]; !exists {
-				idOrder = append(idOrder, actualValue)
-				resultMap[actualValue] = obj
-			}
+			resultMap.Set(actualValue, obj)
 		}
 	}
 
-	for _, value := range idOrder {
-		mappedStruct := resultMap[value]
-		result = reflect.Append(result, mappedStruct)
+	for pair := resultMap.Oldest(); pair != nil; pair = pair.Next() {
+		result = reflect.Append(result, pair.Value)
 	}
+
 	destinationValue.Set(result)
 	return nil
 }
