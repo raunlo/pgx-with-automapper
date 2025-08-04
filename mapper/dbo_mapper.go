@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/pkg/errors"
 	reflectutils "github.com/raunlo/pgx-with-automapper/reflect_utils"
+	ordered_map "github.com/wk8/go-ordered-map/v2"
 )
 
 var (
@@ -52,7 +53,6 @@ func analyzeEntity(currentType reflect.Type) error {
 					dbPrimaryKeyName:          primaryKeyTag,
 					structPrimaryKeyFieldName: currentType.Field(index).Name,
 				}
-				fmt.Println(keyField)
 			} else {
 				return errors.New("multiple primary key fields found")
 			}
@@ -108,7 +108,7 @@ func ScanOne(rows pgx.Rows, dest interface{}) error {
 		if err != nil {
 			return err
 		}
-		_, _, err = mapToStruct(destinationType, rowInMap, lookupEntity, dest)
+		_, err = mapToStruct(destinationType, rowInMap, lookupEntity, dest)
 		if err != nil {
 			return err
 		}
@@ -122,7 +122,7 @@ func ScanOne(rows pgx.Rows, dest interface{}) error {
 
 // ScanMany scans rows into a slice of objects.
 func ScanMany(rows pgx.Rows, dest interface{}) error {
-	resultMap := make(map[interface{}]reflect.Value)
+	resultMap := ordered_map.New[interface{}, reflect.Value]()
 	defer rows.Close()
 	destinationPtrValue := reflect.ValueOf(dest)
 	if dest == nil {
@@ -153,11 +153,10 @@ func ScanMany(rows pgx.Rows, dest interface{}) error {
 			return err
 		}
 
-		obj, _, err := mapToStruct(elType, rowInMap, lookupEntity, newInstance)
+		obj, err := mapToStruct(elType, rowInMap, lookupEntity, newInstance)
 		if err != nil {
 			return err
 		}
-		// Append to the existing slice only if it is not yet mapped
 		if obj.IsValid() {
 			if obj.Kind() == reflect.Ptr {
 				obj = obj.Elem()
@@ -167,24 +166,22 @@ func ScanMany(rows pgx.Rows, dest interface{}) error {
 			keyField := entityMappingInfo.KeyField.structPrimaryKeyFieldName
 
 			field := obj.FieldByName(keyField)
-			fmt.Println(field)
 			actualValue := field.Interface()
-			resultMap[actualValue] = obj
-
-			//result = reflect.Append(result, obj)
+			resultMap.Set(actualValue, obj)
 		}
 	}
 
-	for _, value := range resultMap {
-		result = reflect.Append(result, value)
+	for pair := resultMap.Oldest(); pair != nil; pair = pair.Next() {
+		result = reflect.Append(result, pair.Value)
 	}
+
 	destinationValue.Set(result)
 	return nil
 }
 
 // Function to map database values to struct fields Returns object, if it is already mapper and error
 func mapToStruct(entityType reflect.Type, values map[string]any, lookup map[reflect.Type]map[interface{}]reflect.Value,
-	dest interface{}) (reflect.Value, *bool, error) {
+	dest interface{}) (reflect.Value, error) {
 
 	entityLookup, entityLookupExists := lookup[entityType]
 	if !entityLookupExists {
@@ -197,12 +194,12 @@ func mapToStruct(entityType reflect.Type, values map[string]any, lookup map[refl
 		analyzeEntityGraphs(entityType)
 		entityMappingInfo, _ = GetEntityGraphMappingInfo(entityType)
 		if entityMappingInfo == nil {
-			return reflect.Value{}, nil, errors.New(fmt.Sprintf("no mapping info found for entity(%s)", entityType))
+			return reflect.Value{}, errors.New(fmt.Sprintf("no mapping info found for entity(%s)", entityType))
 		}
 	}
 	keyValue, keyValueExists := values[entityMappingInfo.KeyField.dbPrimaryKeyName]
 	if !keyValueExists {
-		return reflect.Value{}, nil, errors.New("no key field found in values")
+		return reflect.Value{}, errors.New("no key field found in values")
 	}
 
 	obj, entityExists := entityLookup[keyValue]
@@ -221,16 +218,16 @@ func mapToStruct(entityType reflect.Type, values map[string]any, lookup map[refl
 
 			// Convert & Set Value
 			if err := setFieldValue(field, dbValue); err != nil {
-				return reflect.Value{}, nil, fmt.Errorf("failed to map column %s: %w", columnName, err)
+				return reflect.Value{}, fmt.Errorf("failed to map column %s: %w", columnName, err)
 			}
 		}
 	}
 	err := mapRelationships(entityMappingInfo, values, lookup, obj.Elem())
 	if err != nil {
-		return reflect.Value{}, nil, err
+		return reflect.Value{}, err
 	}
 	lookup[entityType][keyValue] = obj
-	return obj, &entityExists, nil
+	return obj, nil
 }
 
 // logic to handle entity relationships. This function creates struct and then appends to current struct
@@ -242,7 +239,7 @@ func mapRelationships(entityMappingInfo *MappingInfo, values map[string]any, loo
 			relationshipEntityType = relationshipEntityType.Elem()
 		}
 
-		value, _, err := mapToStruct(relationshipEntityType, values, lookup, reflect.New(relationshipEntityType).Interface())
+		value, err := mapToStruct(relationshipEntityType, values, lookup, reflect.New(relationshipEntityType).Interface())
 
 		if err != nil {
 			return err
@@ -417,11 +414,7 @@ func setSliceField(field reflect.Value, value interface{}, v reflect.Value) erro
 		} else {
 			return fmt.Errorf("cannot assign or convert %s to %s", v.Type(), elemType)
 		}
-		fmt.Println("Slice before appending")
-		fmt.Println(slice.Interface())
 		slice = reflect.Append(slice, newElem)
-		fmt.Println("Slice after appending")
-		fmt.Println(slice.Interface())
 	}
 
 	// Write back the final slice to the field

@@ -230,14 +230,12 @@ func TestScanMany(t *testing.T) {
 }
 
 func TestQueryWith_LeftJoinManyMatches(t *testing.T) {
-
 	// org dataset which pints to user and datatype is object not pointer
 	type OrgWithManyUsers struct {
 		OrgId   uint   `primaryKey:"org_id"`
 		OrgName string `db:"org_name"`
 		Users   []user `relationship:"oneToMany"`
 	}
-
 	t.Run("Maps many results without left join matches", func(t *testing.T) {
 		mock := setupPostgresMock(t, "^SELECT (.+) FROM org o left join users u on u.user_id = o.user_id$",
 			[][]interface{}{{nil, nil, 1, "default_org"}}, []string{"user_id", "user_name", "org_id", "org_name"})
@@ -256,7 +254,6 @@ func TestQueryWith_LeftJoinManyMatches(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, expectedResult, result)
 	})
-
 
 	t.Run("Maps one result without left join macthes", func(t *testing.T) {
 		mock := setupPostgresMock(t, "^SELECT (.+) FROM org o left join users u on u.user_id = o.user_id$",
