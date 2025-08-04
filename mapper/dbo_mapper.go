@@ -52,7 +52,6 @@ func analyzeEntity(currentType reflect.Type) error {
 					dbPrimaryKeyName:          primaryKeyTag,
 					structPrimaryKeyFieldName: currentType.Field(index).Name,
 				}
-				fmt.Println(keyField)
 			} else {
 				return errors.New("multiple primary key fields found")
 			}
@@ -122,7 +121,12 @@ func ScanOne(rows pgx.Rows, dest interface{}) error {
 
 // ScanMany scans rows into a slice of objects.
 func ScanMany(rows pgx.Rows, dest interface{}) error {
+	// resultNap is used to get unique and most recent data, for example when
+	// there is object with many left join results then you need to overwrite value.
 	resultMap := make(map[interface{}]reflect.Value)
+	// map is not good structure to keeo order.
+	// id order slice will hold order of element sliek sql returns.
+	idOrder := make([]interface{}, 0)
 	defer rows.Close()
 	destinationPtrValue := reflect.ValueOf(dest)
 	if dest == nil {
@@ -167,16 +171,21 @@ func ScanMany(rows pgx.Rows, dest interface{}) error {
 			keyField := entityMappingInfo.KeyField.structPrimaryKeyFieldName
 
 			field := obj.FieldByName(keyField)
-			fmt.Println(field)
 			actualValue := field.Interface()
+
+			if _, exists := resultMap[actualValue]; !exists {
+				idOrder = append(idOrder, actualValue)
+			}
+
 			resultMap[actualValue] = obj
 
 			//result = reflect.Append(result, obj)
 		}
 	}
 
-	for _, value := range resultMap {
-		result = reflect.Append(result, value)
+	for _, value := range idOrder {
+		mappedStruct := resultMap[value]
+		result = reflect.Append(result, mappedStruct)
 	}
 	destinationValue.Set(result)
 	return nil
@@ -417,11 +426,7 @@ func setSliceField(field reflect.Value, value interface{}, v reflect.Value) erro
 		} else {
 			return fmt.Errorf("cannot assign or convert %s to %s", v.Type(), elemType)
 		}
-		fmt.Println("Slice before appending")
-		fmt.Println(slice.Interface())
 		slice = reflect.Append(slice, newElem)
-		fmt.Println("Slice after appending")
-		fmt.Println(slice.Interface())
 	}
 
 	// Write back the final slice to the field
