@@ -1,17 +1,21 @@
 package mapper
 
 import (
-	"github.com/stretchr/testify/assert"
 	"reflect"
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type TestStruct struct{}
 
 func TestConcurrencySetAndGetEntityGraphMappingInfo(t *testing.T) {
 	testType := reflect.TypeOf(TestStruct{})
-	expectedMapping := &MappingInfo{KeyField: "id"}
+	expectedMapping := &MappingInfo{KeyField: &PrimaryKeyInfo{
+		dbPrimaryKeyName:          "id",
+		structPrimaryKeyFieldName: "id",
+	}}
 
 	var wg sync.WaitGroup
 	numRoutines := 50
@@ -45,7 +49,10 @@ func TestConcurrencySetAndGetEntityGraphMappingInfo(t *testing.T) {
 func TestSetAndGetEntityGraphMappingInfo(t *testing.T) {
 	testType := reflect.TypeOf(TestStruct{})
 	expectedMapping := &MappingInfo{
-		KeyField:     "id",
+		KeyField: &PrimaryKeyInfo{
+			dbPrimaryKeyName:          "id",
+			structPrimaryKeyFieldName: "id",
+		},
 		FieldMapping: map[string]int{"id": 0},
 	}
 

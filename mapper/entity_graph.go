@@ -5,8 +5,13 @@ import (
 	"sync"
 )
 
+type PrimaryKeyInfo struct {
+	dbPrimaryKeyName          string
+	structPrimaryKeyFieldName string
+}
+
 type MappingInfo struct {
-	KeyField      string               // Primary key field
+	KeyField      *PrimaryKeyInfo      // Primary key field
 	FieldMapping  map[string]int       // Maps db column name -> struct field index
 	Relationships map[int]reflect.Type // Maps struct field index -> relationship struct type
 }
