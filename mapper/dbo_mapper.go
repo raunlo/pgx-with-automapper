@@ -175,8 +175,6 @@ func ScanMany(rows pgx.Rows, dest interface{}) error {
 
 			if _, exists := resultMap[actualValue]; !exists {
 				idOrder = append(idOrder, actualValue)
-			}
-
 			resultMap[actualValue] = obj
 
 			//result = reflect.Append(result, obj)
